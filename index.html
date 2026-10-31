@@ -41,6 +41,17 @@
         .interval-warning-green, .interval-warning-red { font-size: 0.55rem; line-height: 1.2; background: rgba(0,0,0,0.05); border-radius: 6px; padding: 2px 3px; margin-top: 2px; white-space: normal; word-break: break-word; display: inline-block; max-width: 100%; }
         .interval-warning-green { color: #2e7d32; background: rgba(46,125,50,0.1); }
         .interval-warning-red { color: #d32f2f; background: rgba(211,47,47,0.1); }
+
+        /* ===== 深色班型（K5 / K6 等）自動高對比配色：柔和亮黃字，不刺眼 ===== */
+        .day-cell.dark-cell,
+        .day-cell.dark-cell .day-date,
+        .day-cell.dark-cell .day-shift { color: #FFE082; }
+        .day-cell.dark-cell .day-shift-time { color: rgba(255,236,179,0.82); }
+        .day-cell.dark-cell .interval-warning-green { color: #A5D6A7; background: rgba(165,214,167,0.16); }
+        .day-cell.dark-cell .interval-warning-red { color: #FFAB91; background: rgba(255,171,145,0.16); }
+        .day-cell.dark-cell .day-note { color: #C2185B; }
+        .day-cell.dark-cell .day-empty { color: rgba(255,236,179,0.55); }
+
         .day-color-tags { display: flex; flex-wrap: wrap; gap: 2px; justify-content: center; margin-top: 2px; }
         .day-color-tag { font-size: 0.55rem; font-weight: 700; padding: 1px 4px; border-radius: 8px; white-space: nowrap; display: inline-block; line-height: 1.3; }
         .summary-header { display: flex; justify-content: space-between; align-items: center; cursor: pointer; margin-bottom: 15px; }
@@ -92,9 +103,10 @@
         • <strong>工時間隔提醒（以加班後衝突為準）</strong>：<br>
           - <strong>相同班型</strong> → 綠色提醒 (最多可加班4小時)。<br>
           - <strong>不同班型</strong> → 比較【加班4小時後的休息時間】是否 ≥ 11小時：<br>
-            &nbsp;&nbsp;🔹 若 < 11小時 → <strong class="text-danger">紅色提醒</strong>，並顯示「前日最晚須於 XX:XX 下班」(= 次日上班時間 − 11小時)。<br>
+            &nbsp;&nbsp;🔹 若 &lt; 11小時 → <strong class="text-danger">紅色提醒</strong>，並顯示「前日最晚須於 XX:XX 下班」(= 次日上班時間 − 11小時)。<br>
             &nbsp;&nbsp;🔹 若 ≥ 11小時 → 綠色提醒 (最多可加班4小時)。<br>
         • <strong>代領班</strong>：點擊日期後可手動勾選「標記為代領班」。<br>
+        • <strong>深色班型（K5 / K6）</strong>：黑底黃字，系統會自動判斷底色深淺並切換成柔和亮色文字，備註、警示、標籤依然清楚好讀。<br>
         • <strong>重要！</strong> 請先點擊下方「清除資料」按鈕，再重新上傳班表。
     </div>
     
@@ -121,7 +133,7 @@
             <div class="wallpaper-note mt-2"><i class="bi bi-info-circle"></i> 點擊日期可修改班型與備註。不同班型以加班4小時後是否滿足11小時間隔為準。</div>
         </div>
         <div class="card mt-3"><div class="card-body"><div id="selectedPersonInfo" class="alert alert-info" style="display: none;"></div><div id="personInfoCard" class="person-info-card" style="display: none;"><div class="row"><div class="col-md-8"><h4 id="personNameDisplay"></h4><span id="personCategoryDisplay" class="badge bg-secondary"></span><span id="monthDisplay" class="badge bg-primary ms-2"></span></div><div class="col-md-4 text-md-end"><button class="btn btn-primary" id="copyPersonScheduleBtn"><i class="bi bi-clipboard"></i> 複製班表</button></div></div></div>
-            <div id="personWeeklyCalendar" class="weekly-calendar" style="display: none;"><table class="weekly-calendar-table"><thead id="weekHeader" class="weekly-calendar-header"></thead><tbody id="weeklyCalendarBody"></tbody></tr></div>
+            <div id="personWeeklyCalendar" class="weekly-calendar" style="display: none;"><table class="weekly-calendar-table"><thead id="weekHeader" class="weekly-calendar-header"></thead><tbody id="weeklyCalendarBody"></tbody></table></div>
             <div id="personShiftSummary" class="shift-summary-section" style="display: none;"><div class="summary-header" id="summaryToggleBtn"><h5 class="summary-title"><i class="bi bi-bar-chart"></i> 班表統計</h5><button class="btn summary-toggle"><i class="bi bi-chevron-down"></i></button></div><div class="summary-content collapsed" id="shiftSummaryContent"></div></div>
             <div class="action-buttons" id="actionButtons" style="display: none;">
                 <button class="btn btn-success action-btn" id="downloadImageBtn"><i class="bi bi-image"></i> 下載一般圖片</button>
@@ -173,9 +185,9 @@
     
     // ---------- 正領班徽章顏色（依角色區分） ----------
     const FORMAL_LEADER_COLORS = {
-        '早班領班': { bg: '#FFD700', fg: '#333' },   // 金黃
-        '中班領班': { bg: '#92D050', fg: '#fff' },   // 草綠（同中班代領班）
-        '晚班領班': { bg: '#5C6BC0', fg: '#fff' }    // 靛藍（夜晚）
+        '早班領班': { bg: '#FFD700', fg: '#333' },
+        '中班領班': { bg: '#92D050', fg: '#fff' },
+        '晚班領班': { bg: '#5C6BC0', fg: '#fff' }
     };
     function getFormalLeaderBadgeStyle(role) {
         return FORMAL_LEADER_COLORS[role] || { bg: '#FFD700', fg: '#333' };
@@ -231,14 +243,50 @@
         return best;
     }
     
+    // ========== 深色／淺色自動配色 ==========
+    // 依底色亮度自動決定：
+    //   深色（如 K5 / K6 黑色）→ 提高不透明度讓它真的呈黑底，文字改用柔和的亮黃色（不刺眼）
+    //   淺色                    → 維持原本的淡底 + 深色字
+    function getCellPalette(rgb) {
+        const r = rgb.r, g = rgb.g, b = rgb.b;
+        const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+        const isDark = lum < 0.45;
+        if (isDark) {
+            return {
+                isDark: true,
+                bg: `rgba(${r},${g},${b},0.90)`,
+                fg: '#FFE082',
+                fgSub: 'rgba(255,236,179,0.82)',
+                warnGreenFg: '#A5D6A7',
+                warnGreenBg: 'rgba(165,214,167,0.16)',
+                warnRedFg: '#FFAB91',
+                warnRedBg: 'rgba(255,171,145,0.16)',
+                noteFg: '#C2185B'
+            };
+        }
+        return {
+            isDark: false,
+            bg: `rgba(${r},${g},${b},0.35)`,
+            fg: '#333',
+            fgSub: '#666',
+            warnGreenFg: '#2e7d32',
+            warnGreenBg: 'rgba(46,125,50,0.1)',
+            warnRedFg: '#d32f2f',
+            warnRedBg: 'rgba(211,47,47,0.1)',
+            noteFg: '#FF69B4'
+        };
+    }
+
     const defaultShiftColors = {
         'K0':{r:255,g:255,b:102}, 'M':{r:255,g:255,b:102}, 'M1':{r:255,g:255,b:102}, 'M2':{r:255,g:255,b:102}, 'M3':{r:255,g:255,b:102},
         'D':{r:255,g:107,b:107}, 'D2':{r:255,g:107,b:107}, 'D4':{r:255,g:107,b:107}, 'D5':{r:255,g:107,b:107}, 'D6':{r:255,g:107,b:107},
-        'K2':{r:153,g:153,b:255}, 'K5':{r:153,g:153,b:255}, 'K6':{r:153,g:153,b:255}, 'N':{r:153,g:153,b:255},
+        'K2':{r:153,g:153,b:255}, 'K5':{r:0,g:0,b:0}, 'K6':{r:0,g:0,b:0}, 'N':{r:153,g:153,b:255},
         'Z':{r:204,g:255,b:229}, 'R':{r:204,g:255,b:229}, 'GBL':{r:204,g:255,b:229}, 'L':{r:204,g:255,b:229},
         'A':{r:204,g:255,b:229}, '公':{r:255,g:192,b:203}, '福':{r:204,g:255,b:229}, '體檢':{r:204,g:255,b:229}
     };
     const SPECIAL_DEFAULT_COLOR = { r: 255, g: 192, b: 203 };
+    // 舊版 K5 / K6 預設色（淡紫），用於自動遷移成黑色
+    const LEGACY_K5K6_COLOR = { r: 153, g: 153, b: 255 };
     
     let scheduleData = [], allDates = [], currentFileName = '';
     let shiftColors = { ...defaultShiftColors };
@@ -340,10 +388,6 @@
     function createPersonShiftSummary(personData) { const container = document.getElementById('shiftSummaryContent'); if(!container) return; container.innerHTML=''; const daysInMonth = new Date(scheduleYear, scheduleMonth, 0).getDate(); let shiftCounts={}; let workShiftsSet=new Set(), companyShiftsSet=new Set(), personalShiftsSet=new Set(); for(let d=1;d<=daysInMonth;d++){ let sd=personData.shifts[d]; if(sd && sd.shift){ let code=sd.shift; shiftCounts[code]=(shiftCounts[code]||0)+1; if(holidayShifts.includes(code)){ if(companyHolidays.includes(code)) companyShiftsSet.add(code); else personalShiftsSet.add(code); } else workShiftsSet.add(code); } } let workShiftsList=Array.from(workShiftsSet); workShiftsList.sort((a,b)=>getShiftStartMinutes(a)-getShiftStartMinutes(b)); let companyList=[], personalList=[]; for(let h of companyHolidays) if(companyShiftsSet.has(h)) companyList.push(h); personalList=Array.from(personalShiftsSet).sort(); let workTotal=0, companyTotal=0, personalTotal=0; for(let s of workShiftsList) workTotal+=shiftCounts[s]; for(let s of companyList) companyTotal+=shiftCounts[s]; for(let s of personalList) personalTotal+=shiftCounts[s]; function appendShiftItem(shift,cnt,showDesc=true){ if(cnt===0) return; let color=shiftColors[shift]||{r:128,g:128,b:128}; let item=document.createElement('div'); item.className='summary-item'; item.style.borderLeftColor=`rgb(${color.r},${color.g},${color.b})`; let desc=shiftDescriptions[shift]||(globalSpecialShifts.has(shift)?'特殊班型':''); let displayText=showDesc?`${shift} ${desc}`:shift; item.innerHTML=`<span class="summary-shift">${displayText}</span><span class="summary-count">${cnt} 天</span>`; container.appendChild(item); } if(workShiftsList.length){ let workTitle=document.createElement('div'); workTitle.className='summary-section-title'; workTitle.innerHTML=`📋 上班：共 ${workTotal} 天`; container.appendChild(workTitle); for(let s of workShiftsList) appendShiftItem(s,shiftCounts[s],true); } if(companyList.length){ let companyTitle=document.createElement('div'); companyTitle.className='summary-section-title'; companyTitle.innerHTML=`🏢 放假 (公司的假)：共 ${companyTotal} 天`; container.appendChild(companyTitle); for(let s of companyList) appendShiftItem(s,shiftCounts[s],true); } if(companyList.length&&personalList.length){ let divider=document.createElement('div'); divider.className='shift-divider-green'; container.appendChild(divider); } if(personalList.length){ let personalTitle=document.createElement('div'); personalTitle.className='summary-section-title'; personalTitle.innerHTML=`👤 放假 (自己的假)：共 ${personalTotal} 天`; container.appendChild(personalTitle); for(let s of personalList) appendShiftItem(s,shiftCounts[s],true); } if(workShiftsList.length===0&&companyList.length===0&&personalList.length===0){ let emptyMsg=document.createElement('div'); emptyMsg.className='alert alert-light text-center p-3'; emptyMsg.textContent='暫無班表資料'; container.appendChild(emptyMsg); } let totalDays=workTotal+companyTotal+personalTotal; if(totalDays>0){ let totalItem=document.createElement('div'); totalItem.className='summary-item mt-2'; totalItem.style.borderTop='2px solid #4361ee'; totalItem.innerHTML=`<span class="summary-shift fw-bold">📅 總計 (上班+休假)</span><span class="summary-count fw-bold">${totalDays} 天</span>`; container.appendChild(totalItem); } }
     
     // 判斷此人此班型是否為正領班
-    //   K5 → 晚班領班（優先）
-    //   開始時間 < 14:00 → 早班領班
-    //   開始時間 ≥ 14:00 → 中班領班
-    //   假日班型不顯示
     function getFormalLeaderRole(personName, shiftCode) {
         if (!formalLeaders.has(normalizeName(personName))) return null;
         if (!shiftCode) return null;
@@ -378,7 +422,10 @@
                         
                         if (code) {
                             let colObj = shiftColors[code] || {r:128,g:128,b:128};
-                            td.style.backgroundColor = `rgba(${colObj.r},${colObj.g},${colObj.b},0.35)`;
+                            const pal = getCellPalette(colObj);
+                            td.style.backgroundColor = pal.bg;
+                            if (pal.isDark) td.classList.add('dark-cell');
+
                             let shiftDiv = document.createElement('div'); shiftDiv.className='day-shift';
                             let shiftSpan = document.createElement('span'); shiftSpan.textContent = code;
                             shiftDiv.appendChild(shiftSpan);
@@ -528,7 +575,13 @@
         container.style.backgroundColor='#fdf8e7';
         container.style.padding='30px';
         const style = document.createElement('style');
-        style.textContent = `.download-table{width:100%;table-layout:fixed;border-collapse:collapse;background:#fdf8e7}.download-table th,.download-table td{width:14.2857%!important}.download-table th{border:1px solid #ddd;padding:12px;background:#4361ee;color:white}.download-table td.has-data{border:1px solid #ddd;padding:12px;vertical-align:top;text-align:center;background:#fff9ef}.download-date{font-weight:bold;font-size:1.2rem;margin-bottom:5px}.download-shift{font-weight:600;display:flex;justify-content:center;gap:6px;align-items:center;flex-wrap:wrap}.acting-badge-img{background:#ff9800;color:white;border-radius:10px;padding:0px 4px;font-size:0.65rem}.formal-badge-img{border-radius:10px;padding:0px 4px;font-size:0.65rem;font-weight:700}.download-time{font-size:0.7rem;color:#555}.download-note{font-size:0.6rem;color:#FF69B4;background:#fff;border-radius:8px;padding:2px 4px;margin-top:4px}.download-color-tag{font-size:0.6rem;font-weight:700;border-radius:8px;padding:1px 5px;margin:2px 2px 0 0;display:inline-block}.download-warning-green,.download-warning-red{font-size:0.55rem;padding:2px 3px;border-radius:6px;margin-top:2px}.download-warning-green{color:#2e7d32;background:rgba(46,125,50,0.1)}.download-warning-red{color:#d32f2f;background:rgba(211,47,47,0.1)}`;
+        style.textContent = `.download-table{width:100%;table-layout:fixed;border-collapse:collapse;background:#fdf8e7}.download-table th,.download-table td{width:14.2857%!important}.download-table th{border:1px solid #ddd;padding:12px;background:#4361ee;color:white}.download-table td.has-data{border:1px solid #ddd;padding:12px;vertical-align:top;text-align:center;background:#fff9ef}.download-date{font-weight:bold;font-size:1.2rem;margin-bottom:5px}.download-shift{font-weight:600;display:flex;justify-content:center;gap:6px;align-items:center;flex-wrap:wrap}.acting-badge-img{background:#ff9800;color:white;border-radius:10px;padding:0px 4px;font-size:0.65rem}.formal-badge-img{border-radius:10px;padding:0px 4px;font-size:0.65rem;font-weight:700}.download-time{font-size:0.7rem;color:#555}.download-note{font-size:0.6rem;color:#FF69B4;background:#fff;border-radius:8px;padding:2px 4px;margin-top:4px}.download-color-tag{font-size:0.6rem;font-weight:700;border-radius:8px;padding:1px 5px;margin:2px 2px 0 0;display:inline-block}.download-warning-green,.download-warning-red{font-size:0.55rem;padding:2px 3px;border-radius:6px;margin-top:2px}.download-warning-green{color:#2e7d32;background:rgba(46,125,50,0.1)}.download-warning-red{color:#d32f2f;background:rgba(211,47,47,0.1)}
+        /* 深色班型下載圖自動高對比 */
+        .download-table td.has-data.dark-cell{color:#FFE082}
+        .download-table td.has-data.dark-cell .download-time{color:rgba(255,236,179,0.82)}
+        .download-table td.has-data.dark-cell .download-warning-green{color:#A5D6A7;background:rgba(165,214,167,0.16)}
+        .download-table td.has-data.dark-cell .download-warning-red{color:#FFAB91;background:rgba(255,171,145,0.16)}
+        .download-table td.has-data.dark-cell .download-note{color:#C2185B}`;
         container.appendChild(style);
         let title=document.createElement('h3'); title.textContent=`${name} - ${scheduleYear}年${scheduleMonth}月班表`; title.style.textAlign='center'; title.style.marginBottom='20px';
         container.appendChild(title);
@@ -556,7 +609,10 @@
                         let code = sd.shift || '';
                         if (code) {
                             let col=shiftColors[code]||{r:128,g:128,b:128};
-                            td.style.backgroundColor=`rgba(${col.r},${col.g},${col.b},0.25)`;
+                            const pal = getCellPalette(col);
+                            td.style.backgroundColor = pal.bg;
+                            if (pal.isDark) td.classList.add('dark-cell');
+
                             let shiftDiv=document.createElement('div'); shiftDiv.className='download-shift';
                             let codeSpan=document.createElement('span'); codeSpan.textContent=code;
                             shiftDiv.appendChild(codeSpan);
@@ -658,10 +714,13 @@
         for(let d=1;d<=daysInMonth;d++){
             const sd=person.shifts[d];
             const shiftCode=sd?(sd.shift||''):'';
-            const bgColorObj=shiftCode?(shiftColors[shiftCode]||{r:240,g:240,b:240}):{r:248,g:249,b:250};
-            const bgRgba=`rgba(${bgColorObj.r}, ${bgColorObj.g}, ${bgColorObj.b}, 0.45)`;
+            const bgColorObj=shiftCode?(shiftColors[shiftCode]||{r:240,g:240,b:240}):null;
+            const pal=bgColorObj?getCellPalette(bgColorObj):null;
+            const bgRgba=pal?pal.bg:'rgba(248,249,250,1)';
             const cell=document.createElement('div'); cell.style.backgroundColor=bgRgba; cell.style.borderRadius='10px'; cell.style.padding='6px 0 5px 0'; cell.style.textAlign='center';
-            const dateSpan=document.createElement('div'); dateSpan.style.fontSize='14px'; dateSpan.style.fontWeight='700'; dateSpan.style.color='#2c3e50'; dateSpan.textContent=d; cell.appendChild(dateSpan);
+            const dateSpan=document.createElement('div'); dateSpan.style.fontSize='14px'; dateSpan.style.fontWeight='700';
+            dateSpan.style.color = (pal && pal.isDark) ? pal.fg : '#2c3e50';
+            dateSpan.textContent=d; cell.appendChild(dateSpan);
             if(shiftCode){
                 const formalRole = getFormalLeaderRole(person.name, shiftCode);
                 let formalBadge = '';
@@ -671,14 +730,14 @@
                     formalBadge = `<span style="background:${s.bg}; color:${s.fg}; border-radius:8px; padding:0 3px; font-size:7px; font-weight:700;">👑${shortRole}</span>`;
                 }
                 const shiftSpan=document.createElement('div'); shiftSpan.style.display='flex'; shiftSpan.style.justifyContent='center'; shiftSpan.style.alignItems='center'; shiftSpan.style.gap='4px';
-                shiftSpan.style.fontSize='10px'; shiftSpan.style.fontWeight='600'; shiftSpan.style.marginTop='2px'; shiftSpan.style.color='#1e466e'; shiftSpan.style.flexWrap='wrap';
+                shiftSpan.style.fontSize='10px'; shiftSpan.style.fontWeight='600'; shiftSpan.style.marginTop='2px'; shiftSpan.style.color=(pal && pal.isDark)?pal.fg:'#1e466e'; shiftSpan.style.flexWrap='wrap';
                 shiftSpan.innerHTML=`<span>${shiftCode.length>5?shiftCode.substring(0,5):shiftCode}</span>${sd?.actingLeader? '<span style="background:#ff9800; color:white; border-radius:8px; padding:0 3px; font-size:7px;">🧑‍🏭代</span>':''}${formalBadge}`;
                 cell.appendChild(shiftSpan);
-                if(sd && shiftDescriptions[sd.shift]){ let ts=document.createElement('div'); ts.style.fontSize='6px'; ts.style.color='#6c757d'; ts.style.marginTop='1px'; ts.textContent=shiftDescriptions[sd.shift]; cell.appendChild(ts); }
+                if(sd && shiftDescriptions[sd.shift]){ let ts=document.createElement('div'); ts.style.fontSize='6px'; ts.style.color=(pal && pal.isDark)?pal.fgSub:'#6c757d'; ts.style.marginTop='1px'; ts.textContent=shiftDescriptions[sd.shift]; cell.appendChild(ts); }
             } else if (sd && sd.actingLeader) {
                 let b=document.createElement('div'); b.style.fontSize='7px'; b.style.background='#ff9800'; b.style.color='white'; b.style.borderRadius='8px'; b.style.padding='0 3px'; b.style.display='inline-block'; b.textContent='🧑‍🏭代'; cell.appendChild(b);
             }
-            if(sd && sd.note && sd.note.trim()){ let ns=document.createElement('div'); ns.style.fontSize='6px'; ns.style.color='#FF69B4'; ns.style.backgroundColor='#ffffff'; ns.style.borderRadius='6px'; ns.style.padding='1px 2px'; ns.style.marginTop='2px'; ns.textContent=sd.note.length>12?sd.note.substring(0,12)+'…':sd.note; cell.appendChild(ns); }
+            if(sd && sd.note && sd.note.trim()){ let ns=document.createElement('div'); ns.style.fontSize='6px'; ns.style.color=(pal && pal.isDark)?pal.noteFg:'#FF69B4'; ns.style.backgroundColor='#ffffff'; ns.style.borderRadius='6px'; ns.style.padding='1px 2px'; ns.style.marginTop='2px'; ns.textContent=sd.note.length>12?sd.note.substring(0,12)+'…':sd.note; cell.appendChild(ns); }
             if (sd && sd.colorTags && sd.colorTags.length) {
                 sd.colorTags.forEach(tagName => {
                     let t = COLOR_TAGS.find(x => x.name === tagName);
@@ -697,8 +756,16 @@
                     if(nsd&&nsd.shift&&!holidayShifts.includes(nsd.shift)&&!holidayShifts.includes(shiftCode)){
                         let warn=getIntervalWarning(d,shiftCode,nextDate,nsd.shift,scheduleYear,scheduleMonth);
                         if(warn){
-                            let ws=document.createElement('div'); ws.style.fontSize='5px'; ws.style.backgroundColor='rgba(0,0,0,0.05)'; ws.style.borderRadius='6px'; ws.style.padding='1px 2px'; ws.style.marginTop='2px';
-                            ws.style.color=warn.cssClass==='interval-warning-green'?'#2e7d32':'#d32f2f'; ws.textContent=warn.text; cell.appendChild(ws);
+                            let ws=document.createElement('div'); ws.style.fontSize='5px'; ws.style.borderRadius='6px'; ws.style.padding='1px 2px'; ws.style.marginTop='2px';
+                            if (pal && pal.isDark) {
+                                const isGreen = warn.cssClass === 'interval-warning-green';
+                                ws.style.color = isGreen ? pal.warnGreenFg : pal.warnRedFg;
+                                ws.style.backgroundColor = isGreen ? pal.warnGreenBg : pal.warnRedBg;
+                            } else {
+                                ws.style.backgroundColor='rgba(0,0,0,0.05)';
+                                ws.style.color = warn.cssClass==='interval-warning-green' ? '#2e7d32' : '#d32f2f';
+                            }
+                            ws.textContent=warn.text; cell.appendChild(ws);
                         }
                     }
                 }
@@ -840,7 +907,35 @@
     }
     
     function saveToLocalStorage(sdata,dates,fname){ localStorage.setItem(STORAGE_KEYS.SCHEDULE_DATA,JSON.stringify(sdata)); localStorage.setItem(STORAGE_KEYS.ALL_DATES,JSON.stringify(dates)); localStorage.setItem(STORAGE_KEYS.FILE_NAME,fname); localStorage.setItem(STORAGE_KEYS.TIMESTAMP,Date.now().toString()); saveColorSettingsToLocal(); localStorage.setItem(STORAGE_KEYS.WEEK_START_DAY,weekStartDay); localStorage.setItem(STORAGE_KEYS.SPECIAL_SHIFTS,JSON.stringify([...globalSpecialShifts])); localStorage.setItem(STORAGE_KEYS.FORMAL_LEADERS, JSON.stringify([...formalLeaders])); }
-    function loadFromLocalStorage(){ let sData=localStorage.getItem(STORAGE_KEYS.SCHEDULE_DATA); if(!sData) return null; try{ scheduleData=JSON.parse(sData); allDates=JSON.parse(localStorage.getItem(STORAGE_KEYS.ALL_DATES)); currentFileName=localStorage.getItem(STORAGE_KEYS.FILE_NAME)||''; let cols=localStorage.getItem(STORAGE_KEYS.SHIFT_COLORS); if(cols) shiftColors=JSON.parse(cols); let wd=localStorage.getItem(STORAGE_KEYS.WEEK_START_DAY); if(wd) weekStartDay=parseInt(wd); let sp=localStorage.getItem(STORAGE_KEYS.SPECIAL_SHIFTS); if(sp) globalSpecialShifts=new Set(JSON.parse(sp)); let fl=localStorage.getItem(STORAGE_KEYS.FORMAL_LEADERS); if(fl){ try { formalLeaders = new Set(JSON.parse(fl)); } catch(e){} } for(let s of globalSpecialShifts) if(!shiftColors[s]) shiftColors[s]={...SPECIAL_DEFAULT_COLOR}; return true; }catch(e){return null;} }
+    
+    function loadFromLocalStorage(){ 
+        let sData=localStorage.getItem(STORAGE_KEYS.SCHEDULE_DATA); if(!sData) return null; 
+        try{ 
+            scheduleData=JSON.parse(sData); 
+            allDates=JSON.parse(localStorage.getItem(STORAGE_KEYS.ALL_DATES)); 
+            currentFileName=localStorage.getItem(STORAGE_KEYS.FILE_NAME)||''; 
+            let cols=localStorage.getItem(STORAGE_KEYS.SHIFT_COLORS); 
+            if(cols) shiftColors=JSON.parse(cols); 
+            // 舊版 K5 / K6（淡紫 153,153,255）自動升級為黑色
+            let migrated = false;
+            ['K5','K6'].forEach(k=>{
+                let c = shiftColors[k];
+                if (c && c.r===LEGACY_K5K6_COLOR.r && c.g===LEGACY_K5K6_COLOR.g && c.b===LEGACY_K5K6_COLOR.b) {
+                    shiftColors[k] = { r:0, g:0, b:0 };
+                    migrated = true;
+                }
+            });
+            if (migrated) saveColorSettingsToLocal();
+            let wd=localStorage.getItem(STORAGE_KEYS.WEEK_START_DAY); 
+            if(wd) weekStartDay=parseInt(wd); 
+            let sp=localStorage.getItem(STORAGE_KEYS.SPECIAL_SHIFTS); 
+            if(sp) globalSpecialShifts=new Set(JSON.parse(sp)); 
+            let fl=localStorage.getItem(STORAGE_KEYS.FORMAL_LEADERS); 
+            if(fl){ try { formalLeaders = new Set(JSON.parse(fl)); } catch(e){} } 
+            for(let s of globalSpecialShifts) if(!shiftColors[s]) shiftColors[s]={...SPECIAL_DEFAULT_COLOR}; 
+            return true; 
+        }catch(e){return null;} 
+    }
     function updatePersonSelect() { let sel=document.getElementById('personSelect'); sel.innerHTML='<option value="">請選擇人員</option>'; scheduleData.forEach(p=>{let opt=document.createElement('option'); opt.value=p.name; opt.textContent=p.name; sel.appendChild(opt);}); }
     function updateWeekStartSelector() { let wSel=document.getElementById('weekStartSelector'); wSel.style.display='block'; let select=document.getElementById('weekStartDaySelect'); select.value=weekStartDay; select.onchange=()=>{weekStartDay=parseInt(select.value); localStorage.setItem(STORAGE_KEYS.WEEK_START_DAY,weekStartDay); showSelectedPersonSchedule();}; }
     function clearLocalStorage(){ Object.values(STORAGE_KEYS).forEach(k=>localStorage.removeItem(k)); location.reload(); }
